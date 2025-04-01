@@ -44,6 +44,7 @@
     "@actions/github": "^5.0.0",
     "@actions/io": "^1.1.2",
     "@actions/tool-cache": "^2.0.0",
+    "https-proxy-agent": "^4.0.0",
     "uuid": "^3.3.3"
   },
   "devDependencies": {
