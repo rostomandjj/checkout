@@ -1,6 +1,7 @@
 [![Build and Test](https://github.com/actions/checkout/actions/workflows/test.yml/badge.svg)](https://github.com/actions/checkout/actions/workflows/test.yml)
 
 # Checkout V4
+# checkout
 
 This action checks-out your repository under `$GITHUB_WORKSPACE`, so your workflow can access it.
 
@@ -149,6 +150,9 @@ Please refer to the [release page](https://github.com/actions/checkout/releases/
 
 ```yaml
 - uses: actions/checkout@v4
+steps:
+- uses: actions/checkout@master
+- uses: actions/setup-node@master
   with:
     sparse-checkout: .
 ```
@@ -157,6 +161,10 @@ Please refer to the [release page](https://github.com/actions/checkout/releases/
 
 ```yaml
 - uses: actions/checkout@v4
+By default, the branch or tag ref that triggered the workflow will be checked out. If you wish to check out a different branch, specify that using `with.ref`:
+
+```yaml
+- uses: actions/checkout@master
   with:
     sparse-checkout: |
       .github
@@ -322,6 +330,7 @@ When using the `checkout` action in your GitHub Actions workflow, it is recommen
 permissions:
   contents: read
 ```
+For more details, see [Contexts and expression syntax for GitHub Actions](https://help.github.com/en/articles/contexts-and-expression-syntax-for-github-actions)
 
 # License
 
