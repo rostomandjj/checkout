@@ -213,11 +213,11 @@ class GitAuthHelper {
         this.sshKeyPath = '';
         this.sshKnownHostsPath = '';
         this.temporaryHomePath = '';
+        this.gitConfigPath = '';
         this.git = gitCommandManager;
         this.settings = gitSourceSettings || {};
         // Token auth header
         const serverUrl = urlHelper.getServerUrl(this.settings.githubServerUrl);
-        this.tokenConfigKey = `http.${serverUrl.origin}/.extraheader`; // "origin" is SCHEME://HOSTNAME[:PORT]
         const basicCredential = Buffer.from(`x-access-token:${this.settings.authToken}`, 'utf8').toString('base64');
         core.setSecret(basicCredential);
         this.tokenPlaceholderConfigValue = `AUTHORIZATION: basic ***`;
@@ -273,12 +273,15 @@ function rmRF(inputPath) {
             yield this.removeAuth();
             // Configure new values
             yield this.configureSsh();
-            yield this.configureToken();
+            yield this.configureCredentialsHelper();
         });
     }
     configureTempGlobalConfig() {
         return __awaiter(this, void 0, void 0, function* () {
             var _a;
+            if (!!this.gitConfigPath) {
+                return this.gitConfigPath;
+            }
             // Already setup global config
             if (((_a = this.temporaryHomePath) === null || _a === void 0 ? void 0 : _a.length) > 0) {
                 return path.join(this.temporaryHomePath, '.gitconfig');
@@ -291,7 +294,7 @@ function rmRF(inputPath) {
             yield fs.promises.mkdir(this.temporaryHomePath, { recursive: true });
             // Copy the global git config
             const gitConfigPath = path.join(process.env['HOME'] || os.homedir(), '.gitconfig');
-            const newGitConfigPath = path.join(this.temporaryHomePath, '.gitconfig');
+            this.gitConfigPath = path.join(this.temporaryHomePath, '.gitconfig');
             let configExists = false;
             try {
                 yield fs.promises.stat(gitConfigPath);
@@ -303,18 +306,33 @@ function rmRF(inputPath) {
                 }
             }
             if (configExists) {
-                core.info(`Copying '${gitConfigPath}' to '${newGitConfigPath}'`);
-                yield io.cp(gitConfigPath, newGitConfigPath);
+                core.info(`Copying '${gitConfigPath}' to '${this.gitConfigPath}'`);
+                yield io.cp(gitConfigPath, this.gitConfigPath);
             }
             else {
-                yield fs.promises.writeFile(newGitConfigPath, '');
+                yield fs.promises.writeFile(this.gitConfigPath, '');
             }
             if (isDir) {
                 yield execFile(`rm`, [`-rf`, `${inputPath}`]);
             // Override HOME
             core.info(`Temporarily overriding HOME='${this.temporaryHomePath}' before making global git config changes`);
             this.git.setEnvironmentVariable('HOME', this.temporaryHomePath);
-            return newGitConfigPath;
+            return this.gitConfigPath;
+        });
+    }
+    configureCredentialsHelper() {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (this.settings.lfs) {
+                core.info(`lfs disabled, skipping custom credentials helper`);
+                return;
+            }
+            const newGitConfigPath = yield this.configureTempGlobalConfig();
+            const credentialHelper = `
+    [credential]
+      helper = "!f() { echo username=x-access-token; echo password=${this.tokenConfigValue}; };f"
+    `;
+            core.info(`Configuring git to use a custom credential helper for aut to handle git lfs`);
+            yield fs.promises.appendFile(newGitConfigPath, credentialHelper);
         });
     }
     configureGlobalAuth() {
@@ -323,7 +341,6 @@ function rmRF(inputPath) {
             const newGitConfigPath = yield this.configureTempGlobalConfig();
             try {
                 // Configure the token
-                yield this.configureToken(newGitConfigPath, true);
                 // Configure HTTPS instead of SSH
                 yield this.git.tryConfigUnset(this.insteadOfKey, true);
                 if (!this.settings.sshKey) {
@@ -335,7 +352,6 @@ function rmRF(inputPath) {
             catch (err) {
                 // Unset in case somehow written to the real global config
                 core.info('Encountered an error when attempting to configure token. Attempting unconfigure.');
-                yield this.git.tryConfigUnset(this.tokenConfigKey, true);
                 throw err;
             }
         }
@@ -387,7 +403,7 @@ function which(tool, check) {
                 // refer to https://docs.microsoft.com/en-us/windows-server/identity/ad-ds/manage/component-updates/command-line-process-auditing
                 const output = yield this.git.submoduleForeach(
                 // wrap the pipeline in quotes to make sure it's handled properly by submoduleForeach, rather than just the first part of the pipeline
-                `sh -c "git config --local '${this.tokenConfigKey}' '${this.tokenPlaceholderConfigValue}' && git config --local --show-origin --name-only --get-regexp remote.origin.url"`, this.settings.nestedSubmodules);
+                `sh -c "git config --local --show-origin --name-only --get-regexp remote.origin.url"`, this.settings.nestedSubmodules);
                 // Replace the placeholder
                 const configPaths = output.match(/(?<=(^|\n)file:)[^\t]+(?=\tremote\.origin\.url)/g) || [];
                 for (const configPath of configPaths) {
@@ -501,7 +517,6 @@ function cpDirRecursive(sourceDir, destDir, currentDepth, force) {
     removeAuth() {
         return __awaiter(this, void 0, void 0, function* () {
             yield this.removeSsh();
-            yield this.removeToken();
         });
     }
     removeGlobalConfig() {
@@ -570,22 +585,6 @@ function cpDirRecursive(sourceDir, destDir, currentDepth, force) {
             }
         });
     }
-    configureToken(configPath, globalConfig) {
-        return __awaiter(this, void 0, void 0, function* () {
-            // Validate args
-            assert.ok((configPath && globalConfig) || (!configPath && !globalConfig), 'Unexpected configureToken parameter combinations');
-            // Default config path
-            if (!configPath && !globalConfig) {
-                configPath = path.join(this.git.getWorkingDirectory(), '.git', 'config');
-            }
-            // Configure a placeholder value. This approach avoids the credential being captured
-            // by process creation audit events, which are commonly logged. For more information,
-            // refer to https://docs.microsoft.com/en-us/windows-server/identity/ad-ds/manage/component-updates/command-line-process-auditing
-            yield this.git.config(this.tokenConfigKey, this.tokenPlaceholderConfigValue, globalConfig);
-            // Replace the placeholder
-            yield this.replaceTokenPlaceholder(configPath || '');
-        });
-    }
     replaceTokenPlaceholder(configPath) {
         return __awaiter(this, void 0, void 0, function* () {
             assert.ok(configPath, 'configPath is not defined');
@@ -636,6 +635,8 @@ function cpDirRecursive(sourceDir, destDir, currentDepth, force) {
     }
     removeGitConfig(configKey_1) {
         return __awaiter(this, arguments, void 0, function* (configKey, submoduleOnly = false) {
+    removeGitConfig(configKey, submoduleOnly = false) {
+        return __awaiter(this, void 0, void 0, function* () {
             if (!submoduleOnly) {
                 if ((yield this.git.configExists(configKey)) &&
                     !(yield this.git.tryConfigUnset(configKey))) {
