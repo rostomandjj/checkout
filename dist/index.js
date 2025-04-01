@@ -1511,6 +1511,7 @@ function getSource(settings) {
             else {
                 fetchOptions.fetchDepth = settings.fetchDepth;
                 fetchOptions.fetchTags = settings.fetchTags;
+                fetchOptions.showProgress = settings.showProgress;
                 const refSpec = refHelper.getRefSpec(settings.ref, settings.commit);
                 yield git.fetch(refSpec, fetchOptions);
             }
