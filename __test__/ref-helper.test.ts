@@ -67,6 +67,26 @@ describe('ref-helper tests', () => {
     expect(checkoutInfo.startPoint).toBeFalsy()
   })
 
+  it('getCheckoutInfo refs/', async () => {
+    const checkoutInfo = await refHelper.getCheckoutInfo(
+      git,
+      'refs/gh/queue/main/pr-123',
+      commit
+    )
+    expect(checkoutInfo.ref).toBe(commit)
+    expect(checkoutInfo.startPoint).toBeFalsy()
+  })
+
+  it('getCheckoutInfo refs/ without commit', async () => {
+    const checkoutInfo = await refHelper.getCheckoutInfo(
+      git,
+      'refs/non-standard-ref',
+      ''
+    )
+    expect(checkoutInfo.ref).toBe('refs/non-standard-ref')
+    expect(checkoutInfo.startPoint).toBeFalsy()
+  })
+
   it('getCheckoutInfo unqualified branch only', async () => {
     git.branchExists = jest.fn(async (remote: boolean, pattern: string) => {
       return true

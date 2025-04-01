@@ -42,8 +42,12 @@ export async function getCheckoutInfo(
     result.ref = `refs/remotes/pull/${branch}`
   }
   // refs/tags/
-  else if (upperRef.startsWith('REFS/')) {
+  else if (upperRef.startsWith('REFS/TAGS/')) {
     result.ref = ref
+  }
+  // refs/
+  else if (upperRef.startsWith('REFS/')) {
+    result.ref = commit ? commit : ref
   }
   // Unqualified ref, check for a matching branch or tag
   else {
