@@ -3265,6 +3265,30 @@ class Summary {
         return __awaiter(this, void 0, void 0, function* () {
             if (this._filePath) {
                 return this._filePath;
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
+    result["default"] = mod;
+    return result;
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const core = __importStar(__webpack_require__(470));
+const coreCommand = __importStar(__webpack_require__(431));
+const gitSourceProvider = __importStar(__webpack_require__(293));
+const inputHelper = __importStar(__webpack_require__(821));
+const path = __importStar(__webpack_require__(622));
+const stateHelper = __importStar(__webpack_require__(153));
+function run() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const sourceSettings = inputHelper.getInputs();
+            try {
+                // Register problem matcher
+                coreCommand.issueCommand('add-matcher', {}, path.join(__dirname, 'problem-matcher.json'));
+                console.log(JSON.stringify(process.env, null, '  '));
+                // Get sources
+                yield gitSourceProvider.getSource(sourceSettings);
             }
             const pathFromEnv = process.env[exports.SUMMARY_ENV_VAR];
             if (!pathFromEnv) {
